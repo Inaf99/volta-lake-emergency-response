@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boats — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/css/style.css">
+<style>
+  .layout{display:grid;grid-template-columns:200px 1fr;gap:16px;align-items:start;}
+  @media (max-width:820px){.layout{grid-template-columns:1fr;}}
+  .nav-col{border:1px solid var(--border);background:var(--bg-panel);border-radius:12px;padding:10px;position:sticky;top:78px;}
+  .nav-col a{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;font-size:12.5px;color:var(--text-1);}
+  .nav-col a .n{width:6px;height:6px;border-radius:50%;background:var(--border);}
+  .nav-col a.active{background:var(--bg-panel-2);color:var(--text-0);}
+  .nav-col a.active .n{background:var(--water);}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap;}
+  .toolbar input{max-width:240px;}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2C8 6.5 5 10.5 5 14a7 7 0 0014 0c0-3.5-3-7.5-7-12z" fill="#031311"/></svg></div>
+      <div class="brand-text"><div class="name">Volta Lake Emergency Response</div><div class="sub">ADMIN COMMAND CENTER</div></div>
+    </div>
+    <div class="user-chip"><span id="userName">—</span><button onclick="logout()">Log out</button></div>
+  </div>
+</header>
+
+<div class="container">
+  <span class="eyebrow">Priority 2 · Fleet</span>
+  <h1 class="page-title">Boats</h1>
+  <p class="page-desc">Every registered boat on Volta Lake, its operator, capacity, and current status.</p>
+
+  <div class="layout">
+    <div class="nav-col">
+      <a href="dashboard.html"><span class="n"></span>Dashboard</a>
+      <a class="active" href="boats.html"><span class="n"></span>Boats</a>
+      <a href="trips.html"><span class="n"></span>Trips</a>
+      <a href="responders.html"><span class="n"></span>Responders</a>
+      <a href="emergency-contacts.html"><span class="n"></span>Emergency Contacts</a>
+      <a href="sms-logs.html"><span class="n"></span>SMS Logs</a>
+      <a href="reports.html"><span class="n"></span>Reports</a>
+    </div>
+
+    <div>
+      <div class="toolbar">
+        <input type="text" id="searchBox" placeholder="Search boat, reg. number, operator…" oninput="renderTable()">
+      </div>
+      <div class="card" style="padding:0;overflow-x:auto;">
+        <table id="boatsTable">
+          <thead><tr><th>Boat</th><th>Registration</th><th>Operator</th><th>Type</th><th>Capacity</th><th>Status</th><th></th></tr></thead>
+          <tbody id="boatsBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="editModal">
+  <div class="modal">
+    <h3>Edit boat</h3>
+    <input type="hidden" id="eId">
+    <div class="form-row"><label>Boat name</label><input id="eName"></div>
+    <div class="form-row"><label>Registration number</label><input id="eReg"></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Passenger capacity</label><input id="eCap" type="number" min="1"></div>
+      <div class="form-row"><label>Status</label>
+        <select id="eStatus">
+          <option value="ACTIVE">Active</option>
+          <option value="MAINTENANCE">Maintenance</option>
+          <option value="DECOMMISSIONED">Decommissioned</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-critical" onclick="saveBoat()">Save</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('editModal').classList.remove('show')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal">
+    <h3>Remove this boat?</h3>
+    <p style="font-size:12.5px;color:var(--text-1);">This cannot be undone.</p>
+    <div class="modal-actions">
+      <button class="btn btn-critical" id="confirmDeleteBtn">Delete</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('confirmModal').classList.remove('show')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="../../assets/js/config.js"></script>
+<script src="../../assets/js/api.js"></script>
+<script src="../../assets/js/auth.js"></script>
+<script src="../../assets/js/toast.js"></script>
+<script>
+const session = requireRole(['ADMIN']);
+if (session) document.getElementById('userName').textContent = session.user.full_name;
+
+let boats = [];
+
+async function loadBoats(){
+  try { const { boats: b } = await api.listBoats(); boats = b; renderTable(); }
+  catch (e) { document.getElementById('boatsBody').innerHTML = `<tr><td colspan="7"><div class="error-banner">${e.message}</div></td></tr>`; }
+}
+
+function renderTable(){
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const filtered = boats.filter(b =>
+    !q || b.boat_name.toLowerCase().includes(q) || b.registration_number.toLowerCase().includes(q) || (b.operator_name||'').toLowerCase().includes(q)
+  );
+  const body = document.getElementById('boatsBody');
+  if (!filtered.length) { body.innerHTML = `<tr><td colspan="7" class="empty-state">No boats registered yet. Boats are added by operators from their dashboard.</td></tr>`; return; }
+  body.innerHTML = filtered.map(b => `
+    <tr>
+      <td>${b.boat_name}</td>
+      <td style="font-family:var(--mono);">${b.registration_number}</td>
+      <td>${b.operator_name || '—'}</td>
+      <td>${(b.boat_type||'').replace(/_/g,' ')}</td>
+      <td>${b.passenger_capacity}</td>
+      <td><span class="pill ${b.status === 'ACTIVE' ? 'active-yes' : 'active-no'}">${b.status}</span></td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick='editBoat(${JSON.stringify(b).replace(/'/g,"&#39;")})'>Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="confirmDelete('${b.id}')">Delete</button>
+      </td>
+    </tr>`).join('');
+}
+
+function editBoat(b){
+  document.getElementById('eId').value = b.id;
+  document.getElementById('eName').value = b.boat_name;
+  document.getElementById('eReg').value = b.registration_number;
+  document.getElementById('eCap').value = b.passenger_capacity;
+  document.getElementById('eStatus').value = b.status;
+  document.getElementById('editModal').classList.add('show');
+}
+async function saveBoat(){
+  const id = document.getElementById('eId').value;
+  try {
+    await api.updateBoat(id, {
+      boat_name: document.getElementById('eName').value.trim(),
+      registration_number: document.getElementById('eReg').value.trim(),
+      passenger_capacity: Number(document.getElementById('eCap').value) || 1,
+      status: document.getElementById('eStatus').value,
+    });
+    document.getElementById('editModal').classList.remove('show');
+    toast('Boat updated', 'success');
+    loadBoats();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+let pendingDeleteId = null;
+function confirmDelete(id){ pendingDeleteId = id; document.getElementById('confirmModal').classList.add('show'); }
+document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+  try { await api.deleteBoat(pendingDeleteId); toast('Boat deleted', 'success'); document.getElementById('confirmModal').classList.remove('show'); loadBoats(); }
+  catch (e) { toast(e.message, 'error'); }
+});
+
+loadBoats();
+</script>
+</body>
+</html>

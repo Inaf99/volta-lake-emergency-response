@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boat Operator — Volta Lake Emergency Response</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/style.css">
+<style>
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+  @media (max-width:820px){.grid2{grid-template-columns:1fr;}}
+  .boat-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-soft);font-size:12.5px;}
+  .boat-row:last-child{border-bottom:none;}
+  .sos-zone{text-align:center;padding:18px 0 6px;}
+  .type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0;}
+  .type-btn{border:1px solid var(--border);background:var(--bg-panel-2);border-radius:10px;padding:12px 8px;color:var(--text-1);font-size:11.5px;text-align:center;cursor:pointer;}
+  .type-btn:hover{border-color:var(--water);color:var(--text-0);}
+  .type-btn.sel{border-color:var(--critical);background:var(--critical-dim);color:#fff;}
+  .type-btn .ic{font-size:18px;display:block;margin-bottom:4px;}
+  .gps-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;padding:3px 0;}
+  .status-track{margin:14px 0;}
+  .status-item{display:flex;gap:10px;align-items:flex-start;position:relative;padding-bottom:16px;}
+  .status-item:last-child{padding-bottom:0;}
+  .status-item .line{position:absolute;left:5px;top:14px;bottom:-2px;width:1px;background:var(--border);}
+  .status-item:last-child .line{display:none;}
+  .status-item .node{width:11px;height:11px;border-radius:50%;border:2px solid var(--border);background:var(--bg-1);flex-shrink:0;margin-top:2px;}
+  .status-item.done .node{border-color:var(--water);background:var(--water);}
+  .status-item.active .node{border-color:var(--critical);background:var(--critical);box-shadow:0 0 0 4px #ff413633;}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2C8 6.5 5 10.5 5 14a7 7 0 0014 0c0-3.5-3-7.5-7-12z" fill="#031311"/></svg></div>
+      <div class="brand-text"><div class="name">Volta Lake Emergency Response</div><div class="sub">BOAT OPERATOR</div></div>
+    </div>
+    <div class="nav-links"><a class="active" href="operator.html">Operator dashboard</a></div>
+    <div class="user-chip"><span id="userName">—</span><button onclick="logout()">Log out</button></div>
+  </div>
+</header>
+
+<div class="container">
+  <span class="eyebrow">Priority 1 &amp; 2 · Operator workflow</span>
+  <h1 class="page-title">Boats, trips &amp; emergency reporting</h1>
+  <p class="page-desc">Register your boat, start a trip so responders know your last position, and report an emergency for yourself or a passenger.</p>
+
+  <div id="alertBox"></div>
+
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h3 style="font-size:14px;margin-bottom:12px;">My boats</h3>
+        <div id="boatList"><div class="empty-state">Loading…</div></div>
+        <button class="btn btn-water btn-sm" style="margin-top:12px;" onclick="openBoatModal()">+ Register boat</button>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size:14px;margin-bottom:12px;">Current trip</h3>
+        <div id="tripBox"><div class="empty-state">Loading…</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:14px;margin-bottom:6px;text-align:center;">Emergency SOS</h3>
+      <div class="sos-zone">
+        <div class="sos-btn-wrap">
+          <div class="sos-ring"></div><div class="sos-ring"></div><div class="sos-ring"></div>
+          <button class="sos-btn" id="sosBtn">SOS<span class="sub">TAP TO REPORT</span></button>
+        </div>
+        <p style="font-size:11.5px;color:var(--text-2);max-width:260px;margin:14px auto 0;line-height:1.6;">
+          Reports on behalf of the active trip's boat. If GPS is unavailable, a simulated Volta Lake location will be offered.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="boatModal">
+  <div class="modal">
+    <h3>Register a boat</h3>
+    <div class="form-row"><label>Boat name</label><input id="bName" placeholder="Lake Pride"></div>
+    <div class="form-row"><label>Registration number</label><input id="bReg" placeholder="VOLTA-099"></div>
+    <div class="form-row"><label>Passenger capacity</label><input id="bCap" type="number" min="1" value="10"></div>
+    <div class="modal-actions">
+      <button class="btn btn-critical" onclick="submitBoat()">Register</button>
+      <button class="btn btn-ghost" onclick="closeBoatModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="tripModal">
+  <div class="modal">
+    <h3>Start a trip</h3>
+    <div class="form-row"><label>Boat</label><select id="tBoat"></select></div>
+    <div class="form-row"><label>Departure</label><input id="tFrom" placeholder="Akosombo Landing"></div>
+    <div class="form-row"><label>Destination</label><input id="tTo" placeholder="Kete Krachi"></div>
+    <div class="modal-actions">
+      <button class="btn btn-critical" onclick="submitTrip()">Start trip</button>
+      <button class="btn btn-ghost" onclick="closeTripModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="sosModal"><div class="modal" id="sosModalContent"></div></div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script>
+const session = requireRole(['BOAT_OPERATOR']);
+if (session) document.getElementById('userName').textContent = session.user.full_name;
+
+let myBoats = [];
+let currentTrip = null;
+let selectedType = null;
+let pollTimer = null;
+
+const EMERGENCY_TYPES = [
+  ['BOAT_CAPSIZING','🌊','Capsizing'], ['PERSON_OVERBOARD','🆘','Person overboard'],
+  ['MEDICAL_EMERGENCY','🩺','Medical'], ['FIRE','🔥','Fire'],
+  ['ENGINE_FAILURE','⚙️','Engine failure'], ['COLLISION','💥','Collision'],
+];
+const STATUS_STEPS = ['NEW','ACKNOWLEDGED','RESPONDER_ASSIGNED','RESPONSE_IN_PROGRESS','ARRIVED','RESOLVED'];
+const STATUS_LABEL = { NEW:'Reported', ACKNOWLEDGED:'Acknowledged', RESPONDER_ASSIGNED:'Responder assigned', RESPONSE_IN_PROGRESS:'Response in progress', ARRIVED:'Responder arrived', RESOLVED:'Resolved' };
+
+async function loadBoats(){
+  try {
+    const { boats } = await api.listBoats();
+    myBoats = boats;
+    const list = document.getElementById('boatList');
+    list.innerHTML = boats.length ? boats.map(b => `
+      <div class="boat-row">
+        <div><div>${b.boat_name}</div><div style="color:var(--text-2);font-family:var(--mono);font-size:10.5px;">${b.registration_number} · ${b.passenger_capacity} pax</div></div>
+        <span class="pill active-yes">${b.status}</span>
+      </div>
+    `).join('') : `<div class="empty-state">No boats registered yet.</div>`;
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadTrip(){
+  const box = document.getElementById('tripBox');
+  try {
+    const { trip } = await api.myActiveTrip();
+    currentTrip = trip;
+    if (!trip) {
+      box.innerHTML = `<div class="empty-state">No active trip.</div><button class="btn btn-water btn-sm" style="margin-top:10px;" onclick="openTripModal()">Start trip</button>`;
+      return;
+    }
+    box.innerHTML = `
+      <div class="boat-row"><span>Boat</span><span style="font-family:var(--mono);">${trip.registration_number}</span></div>
+      <div class="boat-row"><span>Route</span><span>${trip.departure_location || '—'} → ${trip.destination || '—'}</span></div>
+      <div class="boat-row"><span>Location</span><span style="font-family:var(--mono);">${trip.current_latitude?.toFixed(4) ?? '—'}, ${trip.current_longitude?.toFixed(4) ?? '—'}</span></div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="endCurrentTrip()">End trip</button>
+    `;
+  } catch (e) { box.innerHTML = `<div class="error-banner">${e.message}</div>`; }
+}
+
+function openBoatModal(){ document.getElementById('boatModal').classList.add('show'); }
+function closeBoatModal(){ document.getElementById('boatModal').classList.remove('show'); }
+async function submitBoat(){
+  try {
+    await api.createBoat({
+      boat_name: document.getElementById('bName').value.trim(),
+      registration_number: document.getElementById('bReg').value.trim(),
+      passenger_capacity: Number(document.getElementById('bCap').value) || 10,
+    });
+    closeBoatModal();
+    toast('Boat registered', 'success');
+    loadBoats();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function openTripModal(){
+  const select = document.getElementById('tBoat');
+  select.innerHTML = myBoats.map(b => `<option value="${b.id}">${b.boat_name} (${b.registration_number})</option>`).join('');
+  document.getElementById('tripModal').classList.add('show');
+}
+function closeTripModal(){ document.getElementById('tripModal').classList.remove('show'); }
+async function submitTrip(){
+  try {
+    const boatId = document.getElementById('tBoat').value;
+    if (!boatId) { toast('Register a boat first', 'error'); return; }
+    await api.startTrip({
+      boat_id: boatId,
+      departure_location: document.getElementById('tFrom').value.trim(),
+      destination: document.getElementById('tTo').value.trim(),
+    });
+    closeTripModal();
+    toast('Trip started', 'success');
+    loadTrip();
+  } catch (e) { toast(e.message, 'error'); }
+}
+async function endCurrentTrip(){
+  if (!currentTrip) return;
+  try { await api.endTrip(currentTrip.id); toast('Trip ended', 'success'); loadTrip(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+/* ---------------- SOS flow (same pattern as passenger.html) ---------------- */
+function getGPS(){
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve({ error: 'Geolocation not supported.' }); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+      (err) => resolve({ error: err.message || 'Location permission denied.' }),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  });
+}
+function simulatedLocation(){ return { latitude: 7.19 + Math.random()*0.06, longitude: -0.20 + Math.random()*0.07, accuracy: 15 }; }
+function openModal(html){ document.getElementById('sosModalContent').innerHTML = html; document.getElementById('sosModal').classList.add('show'); }
+function closeModal(){ document.getElementById('sosModal').classList.remove('show'); selectedType = null; }
+
+document.getElementById('sosBtn').addEventListener('click', () => {
+  openModal(`
+    <h3>Report an emergency?</h3>
+    <p style="color:var(--text-1);font-size:12.5px;line-height:1.6;">This alerts responders and active emergency contacts immediately.</p>
+    <div class="modal-actions">
+      <button class="btn btn-critical" onclick="goTypeStep()">Yes, report emergency</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>`);
+});
+function goTypeStep(){
+  const buttons = EMERGENCY_TYPES.map(([type,icon,label]) =>
+    `<div class="type-btn" onclick="selectType(this,'${type}')"><span class="ic">${icon}</span>${label}</div>`).join('');
+  openModal(`<h3>What's happening?</h3><div class="type-grid">${buttons}</div>
+    <div class="modal-actions"><button class="btn btn-critical" onclick="goGpsStep()">Continue</button></div>`);
+}
+function selectType(el, type){ document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('sel')); el.classList.add('sel'); selectedType = type; }
+async function goGpsStep(){
+  openModal(`<h3>Capturing your location…</h3><div style="text-align:center;padding:20px 0;"><span class="spinner"></span></div>`);
+  const gps = await getGPS();
+  if (gps.error) {
+    openModal(`<h3>Location unavailable</h3><p class="error-banner">${gps.error}</p>
+      <div class="modal-actions">
+        <button class="btn btn-critical" onclick="renderGpsConfirm(simulatedLocation())">Use simulated location</button>
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      </div>`);
+    return;
+  }
+  renderGpsConfirm(gps);
+}
+function renderGpsConfirm(gps){
+  window.__pendingGps = gps;
+  openModal(`<h3>Confirm &amp; send</h3>
+    <div class="card" style="padding:12px 14px;margin-bottom:14px;">
+      <div class="gps-row"><span class="k">Type</span><span class="v">${(selectedType||'OTHER').replace(/_/g,' ')}</span></div>
+      <div class="gps-row"><span class="k">Latitude</span><span class="v">${gps.latitude.toFixed(5)}</span></div>
+      <div class="gps-row"><span class="k">Longitude</span><span class="v">${gps.longitude.toFixed(5)}</span></div>
+      <div class="gps-row"><span class="k">Accuracy</span><span class="v" style="color:var(--ok);">±${Math.round(gps.accuracy)}m</span></div>
+    </div>
+    <div class="modal-actions"><button class="btn btn-critical" id="sendBtn" onclick="sendEmergency()">Send SOS now</button></div>`);
+}
+async function sendEmergency(){
+  const btn = document.getElementById('sendBtn'); btn.disabled = true; btn.textContent = 'Sending…';
+  const gps = window.__pendingGps;
+  try {
+    const { emergency, notified_contacts } = await api.createEmergency({
+      boat_id: currentTrip?.boat_id || (myBoats[0] && myBoats[0].id) || null,
+      trip_id: currentTrip?.id || null,
+      emergency_type: selectedType || 'OTHER',
+      latitude: gps.latitude, longitude: gps.longitude, location_accuracy: gps.accuracy,
+    });
+    showSentModal(emergency, notified_contacts);
+  } catch (err) {
+    openModal(`<h3>Could not send</h3><p class="error-banner">${err.message}</p><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`);
+  }
+}
+function showSentModal(emergency, notifiedContacts){
+  renderStatusModal(emergency, notifiedContacts);
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const { emergency: updated } = await api.getEmergency(emergency.id);
+      renderStatusModal(updated, notifiedContacts, true);
+      if (updated.status === 'RESOLVED') clearInterval(pollTimer);
+    } catch (e) {}
+  }, 4000);
+}
+function renderStatusModal(emergency, notifiedContacts, isUpdate){
+  const idx = STATUS_STEPS.indexOf(emergency.status);
+  const stepsHtml = STATUS_STEPS.map((s,i)=>{
+    const cls = i<idx?'done':(i===idx?'active':'');
+    return `<div class="status-item ${cls}"><div class="line"></div><div class="node"></div><div class="stxt">${STATUS_LABEL[s]}</div></div>`;
+  }).join('');
+  document.getElementById('sosModalContent').innerHTML = `
+    <h3>Emergency #${emergency.id.slice(0,8)}</h3>
+    <div class="hint-banner">✓ SOS sent — ${notifiedContacts} emergency contact(s) notified by SMS.</div>
+    <div class="status-track">${stepsHtml}</div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal(); if(pollTimer) clearInterval(pollTimer);">Close</button></div>`;
+  if (!isUpdate) toast('SOS sent successfully', 'success');
+}
+
+loadBoats().then(loadTrip);
+</script>
+</body>
+</html>

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Passenger — Volta Lake Emergency Response</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/style.css">
+<style>
+  .sos-page{max-width:640px;margin:0 auto;padding-top:8px;}
+  .trip-card .row{display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;}
+  .trip-card .row .k{color:var(--text-2);}
+  .trip-card .row .v{font-family:var(--mono);}
+  .sos-zone{text-align:center;padding:28px 0 10px;}
+  .sos-hint{font-size:12px;color:var(--text-2);max-width:280px;margin:14px auto 0;line-height:1.6;}
+  .type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0;}
+  @media (max-width:480px){.type-grid{grid-template-columns:repeat(2,1fr);}}
+  .type-btn{border:1px solid var(--border);background:var(--bg-panel-2);border-radius:10px;padding:12px 8px;color:var(--text-1);font-size:11.5px;text-align:center;cursor:pointer;}
+  .type-btn:hover{border-color:var(--water);color:var(--text-0);}
+  .type-btn.sel{border-color:var(--critical);background:var(--critical-dim);color:#fff;}
+  .type-btn .ic{font-size:18px;display:block;margin-bottom:4px;}
+  .gps-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;padding:3px 0;}
+  .gps-row .k{color:var(--text-2);}
+  .status-track{margin:14px 0;}
+  .status-item{display:flex;gap:10px;align-items:flex-start;position:relative;padding-bottom:16px;}
+  .status-item:last-child{padding-bottom:0;}
+  .status-item .line{position:absolute;left:5px;top:14px;bottom:-2px;width:1px;background:var(--border);}
+  .status-item:last-child .line{display:none;}
+  .status-item .node{width:11px;height:11px;border-radius:50%;border:2px solid var(--border);background:var(--bg-1);flex-shrink:0;margin-top:2px;}
+  .status-item.done .node{border-color:var(--water);background:var(--water);}
+  .status-item.active .node{border-color:var(--critical);background:var(--critical);box-shadow:0 0 0 4px #ff413633;}
+  .status-item .stxt{font-size:12.5px;color:var(--text-2);}
+  .status-item.done .stxt, .status-item.active .stxt{color:var(--text-0);}
+  .hist-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-soft);font-size:12.5px;}
+  .hist-row:last-child{border-bottom:none;}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2C8 6.5 5 10.5 5 14a7 7 0 0014 0c0-3.5-3-7.5-7-12z" fill="#031311"/></svg></div>
+      <div class="brand-text"><div class="name">Volta Lake Emergency Response</div><div class="sub" id="roleSub">PASSENGER</div></div>
+    </div>
+    <div class="nav-links">
+      <a class="active" href="passenger.html">SOS</a>
+      <a href="passenger.html#history">History</a>
+    </div>
+    <div class="user-chip"><span id="userName">—</span><button onclick="logout()">Log out</button></div>
+  </div>
+</header>
+
+<div class="container sos-page">
+  <span class="eyebrow">Priority 1 · Critical safety workflow</span>
+  <h1 class="page-title">Report an emergency</h1>
+  <p class="page-desc">Press SOS to alert Volta Lake responders. Your GPS location is captured automatically and attached to the alert.</p>
+
+  <div id="alertBox"></div>
+
+  <div class="card trip-card" id="tripCard">
+    <div class="row"><span class="k">Trip</span><span class="v">No active trip</span></div>
+  </div>
+
+  <div class="sos-zone">
+    <div class="sos-btn-wrap">
+      <div class="sos-ring"></div><div class="sos-ring"></div><div class="sos-ring"></div>
+      <button class="sos-btn" id="sosBtn">SOS<span class="sub">TAP TO REPORT</span></button>
+    </div>
+    <div class="sos-hint">If GPS is unavailable (e.g. on a desktop for a class demo), you'll be offered a simulated Volta Lake location instead.</div>
+  </div>
+
+  <h2 id="history" style="font-size:15px;margin:26px 0 10px;">My emergency history</h2>
+  <div class="card" id="historyCard"><div class="empty-state">Loading…</div></div>
+</div>
+
+<!-- SOS flow modal -->
+<div class="modal-backdrop" id="sosModal">
+  <div class="modal" id="sosModalContent"></div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script>
+const session = requireRole(['PASSENGER','BOAT_OPERATOR']);
+if (session) {
+  document.getElementById('userName').textContent = session.user.full_name;
+  document.getElementById('roleSub').textContent = session.user.role.replace('_',' ');
+}
+
+const EMERGENCY_TYPES = [
+  ['BOAT_CAPSIZING','🌊','Capsizing'], ['PERSON_OVERBOARD','🆘','Person overboard'],
+  ['MEDICAL_EMERGENCY','🩺','Medical'], ['FIRE','🔥','Fire'],
+  ['ENGINE_FAILURE','⚙️','Engine failure'], ['BOAT_SINKING','🚤','Sinking'],
+  ['COLLISION','💥','Collision'], ['BAD_WEATHER','⛈️','Bad weather'], ['OTHER','❗','Other'],
+];
+const STATUS_STEPS = ['NEW','ACKNOWLEDGED','RESPONDER_ASSIGNED','RESPONSE_IN_PROGRESS','ARRIVED','RESOLVED'];
+const STATUS_LABEL = { NEW:'Reported', ACKNOWLEDGED:'Acknowledged', RESPONDER_ASSIGNED:'Responder assigned', RESPONSE_IN_PROGRESS:'Response in progress', ARRIVED:'Responder arrived', RESOLVED:'Resolved' };
+
+let selectedType = null;
+let currentTrip = null;
+let currentBoat = null;
+let pollTimer = null;
+
+async function loadTrip(){
+  if (session.user.role !== 'BOAT_OPERATOR') return; // passengers don't own trips in this MVP
+  try {
+    const { trip } = await api.myActiveTrip();
+    currentTrip = trip;
+    const card = document.getElementById('tripCard');
+    if (trip) {
+      card.innerHTML = `
+        <div class="row"><span class="k">Boat</span><span class="v">${trip.registration_number}</span></div>
+        <div class="row"><span class="k">Status</span><span class="v" style="color:var(--ok);">ACTIVE TRIP</span></div>
+        <div class="row"><span class="k">Location</span><span class="v">${trip.current_latitude?.toFixed(4) ?? '—'}, ${trip.current_longitude?.toFixed(4) ?? '—'}</span></div>`;
+    }
+  } catch (e) { /* not fatal */ }
+}
+
+async function loadHistory(){
+  const container = document.getElementById('historyCard');
+  try {
+    const { emergencies } = await api.listMyEmergencies();
+    if (!emergencies.length) {
+      container.innerHTML = `<div class="empty-state">No emergencies reported yet.</div>`;
+      return;
+    }
+    container.innerHTML = emergencies.map(e => `
+      <div class="hist-row">
+        <div>
+          <div>${e.emergency_type.replace(/_/g,' ')}</div>
+          <div style="color:var(--text-2);font-family:var(--mono);font-size:10.5px;">${new Date(e.created_at).toLocaleString()}</div>
+        </div>
+        <span class="pill ${e.status}">${e.status.replace(/_/g,' ')}</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    container.innerHTML = `<div class="error-banner">${e.message}</div>`;
+  }
+}
+
+function getGPS(){
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve({ error: 'Geolocation is not supported by this browser.' });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+      }),
+      (err) => resolve({ error: err.message || 'Location permission denied.' }),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  });
+}
+
+function simulatedVoltaLakeLocation(){
+  // Roughly within the Volta Lake basin, for desktop/class demos.
+  return {
+    latitude: 7.19 + Math.random() * 0.06,
+    longitude: -0.20 + Math.random() * 0.07,
+    accuracy: 15,
+  };
+}
+
+function openModal(html){
+  document.getElementById('sosModalContent').innerHTML = html;
+  document.getElementById('sosModal').classList.add('show');
+}
+function closeModal(){
+  document.getElementById('sosModal').classList.remove('show');
+  selectedType = null;
+}
+
+document.getElementById('sosBtn').addEventListener('click', () => {
+  openModal(`
+    <h3>Report an emergency?</h3>
+    <p style="color:var(--text-1);font-size:12.5px;line-height:1.6;">This immediately alerts Volta Lake responders and every active emergency contact, and shares your GPS location.</p>
+    <div class="modal-actions">
+      <button class="btn btn-critical" onclick="goTypeStep()">Yes, report emergency</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+});
+
+function goTypeStep(){
+  const typeButtons = EMERGENCY_TYPES.map(([type, icon, label]) =>
+    `<div class="type-btn" data-type="${type}" onclick="selectType(this,'${type}')"><span class="ic">${icon}</span>${label}</div>`
+  ).join('');
+  openModal(`
+    <h3>What's happening?</h3>
+    <div class="type-grid">${typeButtons}</div>
+    <div class="modal-actions">
+      <button class="btn btn-critical" onclick="goGpsStep()">Continue</button>
+    </div>
+    <button class="btn btn-ghost" style="width:100%;margin-top:8px;" onclick="goGpsStep(true)">Skip — send now with GPS only</button>
+  `);
+}
+function selectType(el, type){
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('sel'));
+  el.classList.add('sel');
+  selectedType = type;
+}
+
+async function goGpsStep(skip){
+  if (!skip && !selectedType) selectedType = null; // allowed — OTHER fallback below
+  openModal(`<h3>Capturing your location…</h3><div style="text-align:center;padding:20px 0;"><span class="spinner"></span></div>`);
+
+  let gps = await getGPS();
+  if (gps.error) {
+    openModal(`
+      <h3>Location unavailable</h3>
+      <p class="error-banner">${gps.error}</p>
+      <p style="color:var(--text-1);font-size:12.5px;">For this class demo you can send the alert with a simulated Volta Lake location instead.</p>
+      <div class="modal-actions">
+        <button class="btn btn-critical" onclick="useSimulatedLocation()">Use simulated location</button>
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      </div>
+    `);
+    return;
+  }
+  renderGpsConfirm(gps);
+}
+function useSimulatedLocation(){ renderGpsConfirm(simulatedVoltaLakeLocation()); }
+
+function renderGpsConfirm(gps){
+  window.__pendingGps = gps;
+  openModal(`
+    <h3>Confirm &amp; send</h3>
+    <div class="card" style="padding:12px 14px;margin-bottom:14px;">
+      <div class="gps-row"><span class="k">Type</span><span class="v">${(selectedType || 'UNSPECIFIED').replace(/_/g,' ')}</span></div>
+      <div class="gps-row"><span class="k">Latitude</span><span class="v">${gps.latitude.toFixed(5)}</span></div>
+      <div class="gps-row"><span class="k">Longitude</span><span class="v">${gps.longitude.toFixed(5)}</span></div>
+      <div class="gps-row"><span class="k">Accuracy</span><span class="v" style="color:var(--ok);">±${Math.round(gps.accuracy)}m</span></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-critical" id="sendBtn" onclick="sendEmergency()">Send SOS now</button>
+    </div>
+  `);
+}
+
+async function sendEmergency(){
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const gps = window.__pendingGps;
+  try {
+    const { emergency, notified_contacts } = await api.createEmergency({
+      boat_id: currentTrip?.boat_id || null,
+      trip_id: currentTrip?.id || null,
+      emergency_type: selectedType || 'OTHER',
+      latitude: gps.latitude,
+      longitude: gps.longitude,
+      location_accuracy: gps.accuracy,
+    });
+    showSentModal(emergency, notified_contacts);
+    loadHistory();
+  } catch (err) {
+    openModal(`<h3>Could not send</h3><p class="error-banner">${err.message}</p><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`);
+  }
+}
+
+function showSentModal(emergency, notifiedContacts){
+  renderStatusModal(emergency, notifiedContacts);
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const { emergency: updated } = await api.getEmergency(emergency.id);
+      renderStatusModal(updated, notifiedContacts, true);
+      if (updated.status === 'RESOLVED') clearInterval(pollTimer);
+    } catch (e) { /* ignore transient errors while polling */ }
+  }, 4000);
+}
+
+function renderStatusModal(emergency, notifiedContacts, isUpdate){
+  const idx = STATUS_STEPS.indexOf(emergency.status);
+  const stepsHtml = STATUS_STEPS.map((s, i) => {
+    const cls = i < idx ? 'done' : (i === idx ? 'active' : '');
+    return `<div class="status-item ${cls}"><div class="line"></div><div class="node"></div><div class="stxt">${STATUS_LABEL[s]}</div></div>`;
+  }).join('');
+
+  document.getElementById('sosModalContent').innerHTML = `
+    <h3>Emergency #${emergency.id.slice(0,8)}</h3>
+    <div class="hint-banner">✓ SOS sent — ${notifiedContacts} emergency contact(s) notified by SMS.</div>
+    <div class="status-track">${stepsHtml}</div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal(); if(pollTimer) clearInterval(pollTimer);">Close — I'll be notified of updates</button></div>
+  `;
+  document.getElementById('sosModal').classList.add('show');
+  if (!isUpdate) toast('SOS sent successfully', 'success');
+}
+
+loadTrip();
+loadHistory();
+</script>
+</body>
+</html>

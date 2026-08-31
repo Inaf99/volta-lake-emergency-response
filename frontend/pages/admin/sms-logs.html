@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMS Logs — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/css/style.css">
+<style>
+  .layout{display:grid;grid-template-columns:200px 1fr;gap:16px;align-items:start;}
+  @media (max-width:820px){.layout{grid-template-columns:1fr;}}
+  .nav-col{border:1px solid var(--border);background:var(--bg-panel);border-radius:12px;padding:10px;position:sticky;top:78px;}
+  .nav-col a{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;font-size:12.5px;color:var(--text-1);}
+  .nav-col a .n{width:6px;height:6px;border-radius:50%;background:var(--border);}
+  .nav-col a.active{background:var(--bg-panel-2);color:var(--text-0);}
+  .nav-col a.active .n{background:var(--water);}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap;}
+  .toolbar select{max-width:200px;}
+  .msg-preview{max-width:260px;white-space:pre-line;font-family:var(--mono);font-size:10.5px;color:var(--text-2);cursor:pointer;}
+  .msg-preview:hover{color:var(--text-0);}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2C8 6.5 5 10.5 5 14a7 7 0 0014 0c0-3.5-3-7.5-7-12z" fill="#031311"/></svg></div>
+      <div class="brand-text"><div class="name">Volta Lake Emergency Response</div><div class="sub">ADMIN COMMAND CENTER</div></div>
+    </div>
+    <div class="user-chip"><span id="userName">—</span><button onclick="logout()">Log out</button></div>
+  </div>
+</header>
+
+<div class="container">
+  <span class="eyebrow">Priority 2 · Proof of notification</span>
+  <h1 class="page-title">SMS logs</h1>
+  <p class="page-desc">Every SMS the system has attempted to send to an emergency contact — including simulated sends in demo mode. This is how you show the class that notification actually fired for a given emergency.</p>
+
+  <div class="layout">
+    <div class="nav-col">
+      <a href="dashboard.html"><span class="n"></span>Dashboard</a>
+      <a href="boats.html"><span class="n"></span>Boats</a>
+      <a href="trips.html"><span class="n"></span>Trips</a>
+      <a href="responders.html"><span class="n"></span>Responders</a>
+      <a href="emergency-contacts.html"><span class="n"></span>Emergency Contacts</a>
+      <a class="active" href="sms-logs.html"><span class="n"></span>SMS Logs</a>
+      <a href="reports.html"><span class="n"></span>Reports</a>
+    </div>
+
+    <div>
+      <div class="toolbar">
+        <select id="statusFilter" onchange="loadLogs()">
+          <option value="">All statuses</option>
+          <option value="SIMULATED">Simulated</option>
+          <option value="SENT">Sent</option>
+          <option value="FAILED">Failed</option>
+          <option value="PENDING">Pending</option>
+        </select>
+      </div>
+      <div class="card" style="padding:0;overflow-x:auto;">
+        <table id="logsTable">
+          <thead><tr><th>Recipient</th><th>Emergency type</th><th>Provider</th><th>Status</th><th>Message</th><th>Sent</th></tr></thead>
+          <tbody id="logsBody"><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="msgModal">
+  <div class="modal">
+    <h3>Full message</h3>
+    <pre id="fullMessage" style="white-space:pre-wrap;font-family:var(--mono);font-size:12px;background:var(--bg-panel-2);border:1px solid var(--border);border-radius:8px;padding:12px;"></pre>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="document.getElementById('msgModal').classList.remove('show')">Close</button></div>
+  </div>
+</div>
+
+<script src="../../assets/js/config.js"></script>
+<script src="../../assets/js/api.js"></script>
+<script src="../../assets/js/auth.js"></script>
+<script src="../../assets/js/toast.js"></script>
+<script>
+const session = requireRole(['ADMIN']);
+if (session) document.getElementById('userName').textContent = session.user.full_name;
+
+async function loadLogs(){
+  const status = document.getElementById('statusFilter').value;
+  try {
+    const { logs } = await apiRequest(`/sms-logs${status ? `?status=${status}` : ''}`);
+    renderTable(logs);
+  } catch (e) { document.getElementById('logsBody').innerHTML = `<tr><td colspan="6"><div class="error-banner">${e.message}</div></td></tr>`; }
+}
+
+function renderTable(logs){
+  const body = document.getElementById('logsBody');
+  if (!logs.length) { body.innerHTML = `<tr><td colspan="6" class="empty-state">No SMS attempts yet. Report or simulate an emergency to generate one.</td></tr>`; return; }
+  body.innerHTML = logs.map(l => `
+    <tr>
+      <td style="font-family:var(--mono);">${l.recipient_phone}</td>
+      <td>${(l.emergency_type||'—').replace(/_/g,' ')}</td>
+      <td>${l.provider}</td>
+      <td><span class="pill ${l.status}">${l.status}</span></td>
+      <td><div class="msg-preview" onclick='showMessage(${JSON.stringify(l.message).replace(/'/g,"&#39;")})'>${l.message.split('\n')[0]}…</div></td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text-2);">${l.sent_at ? new Date(l.sent_at).toLocaleString() : (l.error_message ? l.error_message : '—')}</td>
+    </tr>`).join('');
+}
+
+function showMessage(msg){
+  document.getElementById('fullMessage').textContent = msg;
+  document.getElementById('msgModal').classList.add('show');
+}
+
+loadLogs();
+setInterval(loadLogs, 10000);
+</script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emergency Contacts — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/css/style.css">
+<style>
+  .layout{display:grid;grid-template-columns:200px 1fr;gap:16px;align-items:start;}
+  @media (max-width:820px){.layout{grid-template-columns:1fr;}}
+  .nav-col{border:1px solid var(--border);background:var(--bg-panel);border-radius:12px;padding:10px;position:sticky;top:78px;}
+  .nav-col a{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;font-size:12.5px;color:var(--text-1);}
+  .nav-col a .n{width:6px;height:6px;border-radius:50%;background:var(--border);}
+  .nav-col a.active{background:var(--bg-panel-2);color:var(--text-0);}
+  .nav-col a.active .n{background:var(--water);}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap;}
+  .toolbar input{max-width:240px;}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2C8 6.5 5 10.5 5 14a7 7 0 0014 0c0-3.5-3-7.5-7-12z" fill="#031311"/></svg></div>
+      <div class="brand-text"><div class="name">Volta Lake Emergency Response</div><div class="sub">ADMIN COMMAND CENTER</div></div>
+    </div>
+    <div class="user-chip"><span id="userName">—</span><button onclick="logout()">Log out</button></div>
+  </div>
+</header>
+
+<div class="container">
+  <span class="eyebrow">Priority 1 · No hard-coded numbers</span>
+  <h1 class="page-title">Emergency contacts</h1>
+  <p class="page-desc">These are exactly who gets an SMS the instant a critical emergency is reported. Manage them here — nothing is hard-coded in source.</p>
+
+  <div class="layout">
+    <div class="nav-col">
+      <a href="dashboard.html"><span class="n"></span>Dashboard</a>
+      <a href="boats.html"><span class="n"></span>Boats</a>
+      <a href="trips.html"><span class="n"></span>Trips</a>
+      <a href="responders.html"><span class="n"></span>Responders</a>
+      <a class="active" href="emergency-contacts.html"><span class="n"></span>Emergency Contacts</a>
+      <a href="sms-logs.html"><span class="n"></span>SMS Logs</a>
+      <a href="reports.html"><span class="n"></span>Reports</a>
+    </div>
+
+    <div>
+      <div class="toolbar">
+        <input type="text" id="searchBox" placeholder="Search name, org, phone…" oninput="renderTable()">
+        <button class="btn btn-water btn-sm" onclick="openContactModal()">+ Add contact</button>
+      </div>
+      <div class="card" style="padding:0;overflow-x:auto;">
+        <table id="contactsTable">
+          <thead><tr><th>Name</th><th>Organization</th><th>Phone</th><th>Type</th><th>Priority</th><th>Status</th><th></th></tr></thead>
+          <tbody id="contactsBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="contactModal">
+  <div class="modal">
+    <h3 id="modalTitle">Add emergency contact</h3>
+    <input type="hidden" id="cId">
+    <div class="form-row"><label>Contact name</label><input id="cName" placeholder="Volta Lake Rescue Team"></div>
+    <div class="form-row"><label>Organization</label><input id="cOrg" placeholder="Marine Emergency Response"></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Phone</label><input id="cPhone" placeholder="+233200000001"></div>
+      <div class="form-row"><label>Priority (1 = highest)</label><input id="cPriority" type="number" min="1" value="1"></div>
+    </div>
+    <div class="form-row">
+      <label>Contact type</label>
+      <select id="cType">
+        <option value="MARINE_RESCUE">Marine Rescue</option>
+        <option value="POLICE">Police</option>
+        <option value="FIRE_SERVICE">Fire Service</option>
+        <option value="AMBULANCE">Ambulance</option>
+        <option value="HOSPITAL">Hospital</option>
+        <option value="BOAT_RESCUE_TEAM">Boat Rescue Team</option>
+        <option value="EMERGENCY_COORDINATOR">Emergency Coordinator</option>
+        <option value="OTHER">Other</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Description</label><textarea id="cDesc" rows="2"></textarea></div>
+    <div class="form-row">
+      <label><input type="checkbox" id="cActive" checked style="width:auto;margin-right:6px;">Active (will receive SMS alerts)</label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-critical" onclick="saveContact()">Save</button>
+      <button class="btn btn-ghost" onclick="closeContactModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal">
+    <h3>Delete this contact?</h3>
+    <p style="font-size:12.5px;color:var(--text-1);">This cannot be undone. The contact will stop receiving emergency SMS immediately.</p>
+    <div class="modal-actions">
+      <button class="btn btn-critical" id="confirmDeleteBtn">Delete</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('confirmModal').classList.remove('show')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="../../assets/js/config.js"></script>
+<script src="../../assets/js/api.js"></script>
+<script src="../../assets/js/auth.js"></script>
+<script src="../../assets/js/toast.js"></script>
+<script>
+const session = requireRole(['ADMIN']);
+if (session) document.getElementById('userName').textContent = session.user.full_name;
+
+let contacts = [];
+
+async function loadContacts(){
+  try { const { contacts: c } = await api.listContacts(); contacts = c; renderTable(); }
+  catch (e) { document.getElementById('contactsBody').innerHTML = `<tr><td colspan="7"><div class="error-banner">${e.message}</div></td></tr>`; }
+}
+
+function renderTable(){
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const filtered = contacts.filter(c =>
+    !q || c.name.toLowerCase().includes(q) || (c.organization||'').toLowerCase().includes(q) || c.phone.includes(q)
+  );
+  const body = document.getElementById('contactsBody');
+  if (!filtered.length) { body.innerHTML = `<tr><td colspan="7" class="empty-state">No contacts found.</td></tr>`; return; }
+  body.innerHTML = filtered.sort((a,b)=>a.priority-b.priority).map(c => `
+    <tr>
+      <td>${c.name}</td>
+      <td>${c.organization || '—'}</td>
+      <td style="font-family:var(--mono);">${c.phone}</td>
+      <td>${c.contact_type.replace(/_/g,' ')}</td>
+      <td>${c.priority}</td>
+      <td><span class="pill ${c.is_active ? 'active-yes' : 'active-no'}">${c.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick='editContact(${JSON.stringify(c).replace(/'/g,"&#39;")})'>Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleActive('${c.id}', ${!c.is_active})">${c.is_active ? 'Disable' : 'Enable'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="confirmDelete('${c.id}')">Delete</button>
+      </td>
+    </tr>`).join('');
+}
+
+function openContactModal(){
+  document.getElementById('modalTitle').textContent = 'Add emergency contact';
+  ['cId','cName','cOrg','cPhone','cDesc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cPriority').value = 1;
+  document.getElementById('cType').value = 'MARINE_RESCUE';
+  document.getElementById('cActive').checked = true;
+  document.getElementById('contactModal').classList.add('show');
+}
+function editContact(c){
+  document.getElementById('modalTitle').textContent = 'Edit emergency contact';
+  document.getElementById('cId').value = c.id;
+  document.getElementById('cName').value = c.name;
+  document.getElementById('cOrg').value = c.organization || '';
+  document.getElementById('cPhone').value = c.phone;
+  document.getElementById('cPriority').value = c.priority;
+  document.getElementById('cType').value = c.contact_type;
+  document.getElementById('cDesc').value = c.description || '';
+  document.getElementById('cActive').checked = c.is_active;
+  document.getElementById('contactModal').classList.add('show');
+}
+function closeContactModal(){ document.getElementById('contactModal').classList.remove('show'); }
+
+async function saveContact(){
+  const id = document.getElementById('cId').value;
+  const payload = {
+    name: document.getElementById('cName').value.trim(),
+    organization: document.getElementById('cOrg').value.trim(),
+    phone: document.getElementById('cPhone').value.trim(),
+    contact_type: document.getElementById('cType').value,
+    description: document.getElementById('cDesc').value.trim(),
+    priority: Number(document.getElementById('cPriority').value) || 1,
+    is_active: document.getElementById('cActive').checked,
+  };
+  if (!payload.name || !payload.phone) { toast('Name and phone are required', 'error'); return; }
+  try {
+    if (id) await api.updateContact(id, payload); else await api.createContact(payload);
+    closeContactModal();
+    toast('Contact saved', 'success');
+    loadContacts();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function toggleActive(id, makeActive){
+  try { await api.setContactActive(id, makeActive); toast(makeActive ? 'Contact enabled' : 'Contact disabled', 'success'); loadContacts(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+let pendingDeleteId = null;
+function confirmDelete(id){ pendingDeleteId = id; document.getElementById('confirmModal').classList.add('show'); }
+document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+  try { await api.deleteContact(pendingDeleteId); toast('Contact deleted', 'success'); document.getElementById('confirmModal').classList.remove('show'); loadContacts(); }
+  catch (e) { toast(e.message, 'error'); }
+});
+
+loadContacts();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "volta-lake-emergency-response",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Location-Aware Emergency Alert and Response System for Passengers and Boat Operators on Volta Lake (university class project)",
+  "scripts": {
+    "install:backend": "cd backend && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "start:backend": "cd backend && npm start",
+    "frontend": "cd frontend && npx serve -l 5173 ."
+  },
+  "license": "MIT"
+}

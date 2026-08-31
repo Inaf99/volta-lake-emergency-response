@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Responder — Volta Lake Emergency Response</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/style.css">
+<style>
+  .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start;}
+  @media (max-width:900px){.grid2{grid-template-columns:1fr;}}
+  .inc-row{border:1px solid var(--border);border-left:3px solid var(--border);background:var(--bg-panel-2);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:12px;cursor:pointer;font-size:12px;margin-bottom:8px;}
+  .inc-row:hover{border-color:var(--water);}
+  .inc-row.sel{outline:1px solid var(--water);}
+  .inc-row.crit{border-left-color:var(--critical);}
+  .inc-row.high{border-left-color:var(--high);}
+  .inc-row .type{font-weight:600;flex:1;}
+  .inc-row .time{font-family:var(--mono);color:var(--text-2);font-size:10.5px;}
+  .drow{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border-soft);}
+  .drow .k{color:var(--text-2);} .drow .v{font-family:var(--mono);text-align:right;}
+  .detail-actions{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2C8 6.5 5 10.5 5 14a7 7 0 0014 0c0-3.5-3-7.5-7-12z" fill="#031311"/></svg></div>
+      <div class="brand-text"><div class="name">Volta Lake Emergency Response</div><div class="sub">RESPONDER</div></div>
+    </div>
+    <div class="nav-links"><a class="active" href="responder.html">Active incidents</a></div>
+    <div class="user-chip"><span id="userName">—</span><button onclick="logout()">Log out</button></div>
+  </div>
+</header>
+
+<div class="container">
+  <span class="eyebrow">Priority 1 · Response workflow</span>
+  <h1 class="page-title">Incidents assigned to you and available for pickup</h1>
+  <p class="page-desc">Acknowledge, accept assignment, update status as you respond, and resolve once the incident is handled.</p>
+
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h3 style="font-size:14px;margin-bottom:12px;">Emergencies</h3>
+        <div id="incidentList"><div class="empty-state">Loading…</div></div>
+      </div>
+    </div>
+    <div class="card" id="detailPanel">
+      <h3 style="font-size:14px;">Incident detail</h3>
+      <div class="empty-state">Select an incident to view details and take action.</div>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script>
+const session = requireRole(['RESPONDER']);
+if (session) document.getElementById('userName').textContent = session.user.full_name;
+
+const STATUS_FLOW = ['NEW','ACKNOWLEDGED','RESPONDER_ASSIGNED','RESPONSE_IN_PROGRESS','ARRIVED','RESOLVED'];
+let incidents = [];
+let selectedId = null;
+let myResponderId = null;
+
+async function loadMyResponderProfile(){
+  try { const { responder } = await api.myResponderProfile(); myResponderId = responder?.id || null; }
+  catch (e) { /* not fatal */ }
+}
+
+async function loadIncidents(){
+  try {
+    const { emergencies } = await api.listEmergencies();
+    incidents = emergencies.filter(e => e.status !== 'RESOLVED' && e.status !== 'CANCELLED');
+    renderList();
+    if (selectedId) renderDetail();
+  } catch (e) {
+    document.getElementById('incidentList').innerHTML = `<div class="error-banner">${e.message}</div>`;
+  }
+}
+
+function renderList(){
+  const list = document.getElementById('incidentList');
+  if (!incidents.length) { list.innerHTML = `<div class="empty-state">No active emergencies right now.</div>`; return; }
+  list.innerHTML = incidents.map(i => `
+    <div class="inc-row ${i.priority==='CRITICAL'?'crit':(i.priority==='HIGH'?'high':'')} ${i.id===selectedId?'sel':''}" onclick="selectIncident('${i.id}')">
+      <span class="type">${i.emergency_type.replace(/_/g,' ')}</span>
+      <span class="pill ${i.status}">${i.status.replace(/_/g,' ')}</span>
+      <span class="time">${new Date(i.created_at).toLocaleTimeString()}</span>
+    </div>`).join('');
+}
+
+function selectIncident(id){ selectedId = id; renderList(); renderDetail(); }
+
+function renderDetail(){
+  const panel = document.getElementById('detailPanel');
+  const i = incidents.find(x => x.id === selectedId);
+  if (!i) { panel.innerHTML = `<h3 style="font-size:14px;">Incident detail</h3><div class="empty-state">Select an incident.</div>`; return; }
+
+  const idx = STATUS_FLOW.indexOf(i.status);
+  const next = STATUS_FLOW[idx + 1];
+  const isMine = i.responder_id === myResponderId;
+  const canAssignToMe = !i.responder_id && myResponderId;
+
+  panel.innerHTML = `
+    <h3 style="font-size:14px;">Incident #${i.id.slice(0,8)} <span class="pill ${i.status}" style="margin-left:6px;">${i.status.replace(/_/g,' ')}</span></h3>
+    <div class="drow"><span class="k">Type</span><span class="v">${i.emergency_type.replace(/_/g,' ')}</span></div>
+    <div class="drow"><span class="k">Priority</span><span class="v">${i.priority}</span></div>
+    <div class="drow"><span class="k">Reporter</span><span class="v">${i.reporter_name}</span></div>
+    <div class="drow"><span class="k">Boat</span><span class="v">${i.registration_number || 'N/A'}</span></div>
+    <div class="drow"><span class="k">GPS</span><span class="v">${i.latitude.toFixed(4)}, ${i.longitude.toFixed(4)}</span></div>
+    <div class="drow"><span class="k">Assigned to</span><span class="v">${i.responder_name || 'Unassigned'}</span></div>
+    <div class="detail-actions">
+      ${!i.responder_id ? `<button class="btn btn-critical" onclick="assignToMe('${i.id}')">Accept assignment</button>` : ''}
+      ${i.status === 'NEW' ? `<button class="btn btn-critical" onclick="advance('${i.id}','ACKNOWLEDGED')">Acknowledge</button>` : ''}
+      ${next && i.status !== 'NEW' ? `<button class="btn btn-water" onclick="advance('${i.id}','${next}')">Mark as ${next.replace(/_/g,' ')}</button>` : ''}
+      <a class="btn btn-ghost" style="text-align:center;" target="_blank" href="https://www.openstreetmap.org/?mlat=${i.latitude}&mlon=${i.longitude}#map=16/${i.latitude}/${i.longitude}">Navigate to emergency</a>
+    </div>
+  `;
+}
+
+async function assignToMe(id){
+  try {
+    await api.assignResponder(id, myResponderId);
+    toast('Assignment accepted', 'success');
+    loadIncidents();
+  } catch (e) { toast(e.message, 'error'); }
+}
+async function advance(id, status){
+  try {
+    await api.updateEmergencyStatus(id, status);
+    toast(`Marked as ${status.replace(/_/g,' ')}`, 'success');
+    loadIncidents();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+loadMyResponderProfile().then(loadIncidents);
+setInterval(loadIncidents, 8000);
+</script>
+</body>
+</html>

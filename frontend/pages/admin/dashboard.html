@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — Volta Lake Emergency Response</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="../../assets/css/style.css">
+<style>
+  .cmd-grid{display:grid;grid-template-columns:200px 1.5fr 1fr;gap:16px;align-items:start;}
+  @media (max-width:1080px){.cmd-grid{grid-template-columns:1fr;}}
+  .nav-col{border:1px solid var(--border);background:var(--bg-panel);border-radius:12px;padding:10px;position:sticky;top:78px;}
+  .nav-col a{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;font-size:12.5px;color:var(--text-1);}
+  .nav-col a .n{width:6px;height:6px;border-radius:50%;background:var(--border);}
+  .nav-col a.active{background:var(--bg-panel-2);color:var(--text-0);}
+  .nav-col a.active .n{background:var(--water);}
+  .inc-row{border:1px solid var(--border);border-left:3px solid var(--border);background:var(--bg-panel-2);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:12px;cursor:pointer;font-size:12px;margin-bottom:8px;}
+  .inc-row:hover{border-color:var(--water);}
+  .inc-row.sel{outline:1px solid var(--water);}
+  .inc-row.CRITICAL{border-left-color:var(--critical);}
+  .inc-row.HIGH{border-left-color:var(--high);}
+  .inc-row .type{font-weight:600;flex:1;}
+  .inc-row .time{font-family:var(--mono);color:var(--text-2);font-size:10.5px;}
+  .drow{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border-soft);}
+  .drow .k{color:var(--text-2);} .drow .v{font-family:var(--mono);text-align:right;}
+  .detail-actions{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+  .detail-panel{position:sticky;top:78px;}
+  .demo-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px dashed var(--border);background:var(--bg-panel);border-radius:10px;padding:12px 14px;margin-bottom:18px;}
+  .demo-bar .lbl{font-family:var(--mono);font-size:10.5px;color:var(--water);text-transform:uppercase;letter-spacing:.08em;}
+  .demo-bar p{margin:0;font-size:12px;color:var(--text-1);flex:1;min-width:200px;}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2C8 6.5 5 10.5 5 14a7 7 0 0014 0c0-3.5-3-7.5-7-12z" fill="#031311"/></svg></div>
+      <div class="brand-text"><div class="name">Volta Lake Emergency Response</div><div class="sub">ADMIN COMMAND CENTER</div></div>
+    </div>
+    <div class="user-chip"><span id="userName">—</span><button onclick="logout()">Log out</button></div>
+  </div>
+</header>
+
+<div class="container">
+  <span class="eyebrow">Priority 1 · Operations center</span>
+  <h1 class="page-title">Responder command dashboard</h1>
+  <p class="page-desc">Every active incident on Volta Lake, ranked by severity, with SMS notification status.</p>
+
+  <div class="demo-bar">
+    <span class="lbl">Demo mode</span>
+    <p>Simulate a new SOS exactly as the passenger app would send it — including SMS to active emergency contacts.</p>
+    <button class="btn btn-water btn-sm" onclick="simulateEmergency()">Simulate incoming SOS</button>
+  </div>
+
+  <div class="stat-strip" id="statStrip"></div>
+
+  <div class="cmd-grid">
+    <div class="nav-col">
+      <a class="active" href="dashboard.html"><span class="n"></span>Dashboard</a>
+      <a href="boats.html"><span class="n"></span>Boats</a>
+      <a href="trips.html"><span class="n"></span>Trips</a>
+      <a href="responders.html"><span class="n"></span>Responders</a>
+      <a href="emergency-contacts.html"><span class="n"></span>Emergency Contacts</a>
+      <a href="sms-logs.html"><span class="n"></span>SMS Logs</a>
+      <a href="reports.html"><span class="n"></span>Reports</a>
+    </div>
+
+    <div>
+      <div class="card">
+        <h3 style="font-size:14px;margin-bottom:10px;">Live incident map <span style="font-weight:400;font-family:var(--mono);font-size:10px;color:var(--text-2);">Volta Lake, Ghana</span></h3>
+        <div id="map"></div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3 style="font-size:14px;margin-bottom:10px;">Emergencies</h3>
+        <div id="incidentList"><div class="empty-state">Loading…</div></div>
+      </div>
+    </div>
+
+    <div class="card detail-panel" id="detailPanel">
+      <h3 style="font-size:14px;">Incident detail</h3>
+      <div class="empty-state">Select an incident from the map or list.</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../../assets/js/config.js"></script>
+<script src="../../assets/js/api.js"></script>
+<script src="../../assets/js/auth.js"></script>
+<script src="../../assets/js/toast.js"></script>
+<script>
+const session = requireRole(['ADMIN']);
+if (session) document.getElementById('userName').textContent = session.user.full_name;
+
+const STATUS_FLOW = ['NEW','ACKNOWLEDGED','RESPONDER_ASSIGNED','RESPONSE_IN_PROGRESS','ARRIVED','RESOLVED'];
+const DEMO_TYPES = ['BOAT_CAPSIZING','PERSON_OVERBOARD','MEDICAL_EMERGENCY','FIRE','ENGINE_FAILURE','BAD_WEATHER','COLLISION','MISSING_BOAT_PERSON'];
+
+let incidents = [];
+let selectedId = null;
+let map, markersLayer;
+
+function initMap(){
+  map = L.map('map', { zoomControl: true }).setView([7.21, -0.18], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 17,
+  }).addTo(map);
+  markersLayer = L.layerGroup().addTo(map);
+}
+
+function markerColor(priority){
+  return priority === 'CRITICAL' ? '#ff4136' : (priority === 'HIGH' ? '#f5a623' : '#3ddc84');
+}
+
+function renderMarkers(){
+  markersLayer.clearLayers();
+  incidents.forEach(i => {
+    const marker = L.circleMarker([i.latitude, i.longitude], {
+      radius: 8, color: markerColor(i.priority), fillColor: markerColor(i.priority), fillOpacity: .85, weight: 2,
+    }).addTo(markersLayer);
+    marker.bindPopup(`
+      <strong>${i.emergency_type.replace(/_/g,' ')}</strong><br>
+      ${i.status.replace(/_/g,' ')} · ${i.priority}<br>
+      ${i.reporter_name || ''} — ${i.registration_number || 'N/A'}<br>
+      ${i.latitude.toFixed(4)}, ${i.longitude.toFixed(4)}
+    `);
+    marker.on('click', () => selectIncident(i.id));
+  });
+}
+
+async function loadStats(){
+  try {
+    const { stats } = await api.emergencyStats();
+    const cards = [
+      { n: stats.active_emergencies, l: 'Active emergencies', c: 'crit' },
+      { n: stats.critical_emergencies, l: 'Critical', c: 'crit' },
+      { n: stats.new_alerts, l: 'New alerts', c: 'high' },
+      { n: stats.acknowledged_alerts, l: 'Acknowledged', c: 'high' },
+      { n: stats.resolved_incidents, l: 'Resolved', c: 'ok' },
+      { n: stats.cancelled_alerts, l: 'Cancelled', c: 'ok' },
+    ];
+    document.getElementById('statStrip').innerHTML = cards.map(s => `
+      <div class="stat ${s.c}"><div class="num">${s.n}</div><div class="lbl">${s.l}</div></div>
+    `).join('');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadIncidents(){
+  try {
+    const { emergencies } = await api.listEmergencies();
+    incidents = emergencies;
+    renderList();
+    renderMarkers();
+    if (selectedId) renderDetail();
+  } catch (e) {
+    document.getElementById('incidentList').innerHTML = `<div class="error-banner">${e.message}</div>`;
+  }
+}
+
+function renderList(){
+  const list = document.getElementById('incidentList');
+  if (!incidents.length) { list.innerHTML = `<div class="empty-state">No emergencies yet. Try "Simulate incoming SOS".</div>`; return; }
+  list.innerHTML = incidents.map(i => `
+    <div class="inc-row ${i.priority} ${i.id===selectedId?'sel':''}" onclick="selectIncident('${i.id}')">
+      <span class="type">${i.emergency_type.replace(/_/g,' ')}</span>
+      <span class="pill ${i.status}">${i.status.replace(/_/g,' ')}</span>
+      <span class="time">${new Date(i.created_at).toLocaleTimeString()}</span>
+    </div>`).join('');
+}
+
+function selectIncident(id){
+  selectedId = id;
+  renderList();
+  renderDetail();
+  const i = incidents.find(x => x.id === id);
+  if (i) map.setView([i.latitude, i.longitude], 12);
+}
+
+function renderDetail(){
+  const panel = document.getElementById('detailPanel');
+  const i = incidents.find(x => x.id === selectedId);
+  if (!i) { panel.innerHTML = `<h3 style="font-size:14px;">Incident detail</h3><div class="empty-state">Select an incident.</div>`; return; }
+  const idx = STATUS_FLOW.indexOf(i.status);
+  const next = STATUS_FLOW[idx+1];
+  panel.innerHTML = `
+    <h3 style="font-size:14px;">#${i.id.slice(0,8)} <span class="pill ${i.status}" style="margin-left:6px;">${i.status.replace(/_/g,' ')}</span></h3>
+    <div class="drow"><span class="k">Type</span><span class="v">${i.emergency_type.replace(/_/g,' ')}</span></div>
+    <div class="drow"><span class="k">Priority</span><span class="v">${i.priority}</span></div>
+    <div class="drow"><span class="k">Reporter</span><span class="v">${i.reporter_name}</span></div>
+    <div class="drow"><span class="k">Boat</span><span class="v">${i.registration_number || 'N/A'}</span></div>
+    <div class="drow"><span class="k">GPS</span><span class="v">${i.latitude.toFixed(4)}, ${i.longitude.toFixed(4)}</span></div>
+    <div class="drow"><span class="k">Responder</span><span class="v">${i.responder_name || 'Unassigned'}</span></div>
+    <div class="detail-actions">
+      ${!i.assigned_responder_id ? `<button class="btn btn-critical" onclick="autoAssign('${i.id}')">Assign nearest responder</button>` : ''}
+      ${next ? `<button class="btn btn-water" onclick="advance('${i.id}','${next}')">Mark as ${next.replace(/_/g,' ')}</button>` : `<button class="btn btn-ghost" disabled>Resolved</button>`}
+      <a class="btn btn-ghost" style="text-align:center;" target="_blank" href="https://www.openstreetmap.org/?mlat=${i.latitude}&mlon=${i.longitude}#map=16/${i.latitude}/${i.longitude}">Navigate to emergency</a>
+    </div>
+  `;
+}
+
+async function advance(id, status){
+  try { await api.updateEmergencyStatus(id, status); toast(`Marked as ${status.replace(/_/g,' ')}`, 'success'); loadIncidents(); loadStats(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+async function autoAssign(id){
+  try { await api.assignResponder(id); toast('Nearest responder assigned', 'success'); loadIncidents(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+async function simulateEmergency(){
+  const type = DEMO_TYPES[Math.floor(Math.random()*DEMO_TYPES.length)];
+  const lat = 7.19 + Math.random()*0.06;
+  const lng = -0.20 + Math.random()*0.07;
+  try {
+    // The demo button acts as an admin-triggered simulated passenger report.
+    const { emergency, notified_contacts } = await api.createEmergency({
+      emergency_type: type, latitude: lat, longitude: lng, location_accuracy: 12,
+    });
+    toast(`Simulated ${type.replace(/_/g,' ')} — ${notified_contacts} contact(s) notified`, 'success');
+    loadIncidents(); loadStats();
+    selectIncident(emergency.id);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+initMap();
+loadStats();
+loadIncidents();
+setInterval(() => { loadIncidents(); loadStats(); }, 8000);
+</script>
+</body>
+</html>
