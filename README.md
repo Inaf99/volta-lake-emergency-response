@@ -2,6 +2,30 @@
 
 **Location-Aware Emergency Alert and Response System for Passengers and Boat Operators on Volta Lake**
 
+## Live demo
+
+The full system is deployed and shareable — no install required to try it:
+
+- **App:** https://volta-lake-emergency.netlify.app
+- **API:** https://volta-lake-emergency-response.onrender.com/api
+
+Sign in with any seeded demo account (or use "Create account" to make your own):
+
+| Role | Phone | Password |
+|---|---|---|
+| Admin | +233240000001 | password123 |
+| Passenger | +233240000002 | password123 |
+| Boat Operator | +233240000003 or 04 | password123 |
+| Responder | +233240000005 or 06 | password123 |
+
+Everyone who opens this link shares the same live database (hosted on Neon), so an SOS
+sent from one person's browser shows up immediately on another person's admin dashboard —
+this is the easiest way to demo the full loop with teammates in different locations.
+
+**One quirk to know about:** the backend is hosted on Render's free tier, which "sleeps"
+after 15 minutes of no traffic. The *first* request after a period of inactivity can take
+30-60 seconds to respond while it wakes back up — that's expected, not a bug.
+
 A university class project prototype. It is a realistic, fully working demonstration of a
 marine emergency-alert system — not a production emergency service. Every "what's
 implemented vs. simulated" distinction is spelled out in section 16 below, because you'll

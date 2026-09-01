@@ -2,6 +2,10 @@
 
 Beginner-friendly walkthrough of each role, written for a class demo or defense.
 
+> **Try it live right now:** https://volta-lake-emergency.netlify.app — no install
+> needed. Everyone who opens this link shares the same live database, so it's the
+> easiest way to demo the SOS → responder → resolution loop with teammates.
+
 ## Signing in
 
 Open `http://localhost:5173` (after starting both servers — see the root README). You'll
