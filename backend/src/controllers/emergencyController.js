@@ -49,6 +49,8 @@ const createEmergency = asyncHandler(async (req, res) => {
   res.status(201).json({
     emergency: full,
     notified_contacts: notifyResult.contactsNotified,
+    responder_notified: notifyResult.responderNotified,
+    admins_notified: notifyResult.adminsNotified,
     sms_logs: notifyResult.smsLogs,
   });
 });
@@ -112,6 +114,12 @@ const assignResponder = asyncHandler(async (req, res) => {
   const updated = await emergencyModel.assignResponder(req.params.id, responderId);
   await responderModel.updateStatusAndLocation(responderId, { availability_status: 'BUSY' });
   await notificationService.notifyStatusChange(updated, 'RESPONDER_ASSIGNED');
+
+  const responderRecord = await responderModel.findById(responderId);
+  if (responderRecord?.phone) {
+    await notificationService.notifyResponderAssigned(updated, responderRecord);
+  }
+
   await auditLogModel.record({
     actor_id: req.user.id,
     action: 'RESPONDER_ASSIGNED',

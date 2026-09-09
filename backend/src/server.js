@@ -15,6 +15,7 @@ const emergencyContactRoutes = require('./routes/emergencyContactRoutes');
 const responderRoutes = require('./routes/responderRoutes');
 const smsLogRoutes = require('./routes/smsLogRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const offlineRoutes = require('./routes/offlineRoutes');
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/emergency-contacts', emergencyContactRoutes);
 app.use('/api/responders', responderRoutes);
 app.use('/api/sms-logs', smsLogRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/offline-contacts', offlineRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

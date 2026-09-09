@@ -5,6 +5,7 @@
 const notificationModel = require('../models/notificationModel');
 const emergencyContactModel = require('../models/emergencyContactModel');
 const responderModel = require('../models/responderModel');
+const userModel = require('../models/userModel');
 const smsService = require('./smsService');
 const buildMapLink = require('../utils/buildMapLink');
 
@@ -33,6 +34,10 @@ function buildSmsMessage(emergency) {
  * Runs the full notification fan-out for a newly created emergency:
  *  1. in-app notification rows for admins/responders
  *  2. SMS to every active emergency contact
+ *  3. SMS + in-app notification straight to the nearest available responder
+ *     ("the designated responder") — fires immediately on creation, before
+ *     anyone has manually assigned or acknowledged anything
+ *  4. SMS + in-app notification to every admin account
  */
 async function notifyNewEmergency(emergency) {
   const inAppMessage = `New ${emergency.priority} emergency (${emergency.emergency_type.replace(/_/g, ' ')}) reported near ${emergency.latitude.toFixed(3)}, ${emergency.longitude.toFixed(3)}.`;
@@ -49,7 +54,52 @@ async function notifyNewEmergency(emergency) {
   const message = buildSmsMessage(emergency);
   const smsLogs = await smsService.sendEmergencySMS({ emergency, contacts: activeContacts, message });
 
-  return { inAppMessage, smsLogs, contactsNotified: activeContacts.length };
+  // Immediately notify the nearest available responder — the "designated
+  // responder" for this emergency — even though no one has formally
+  // assigned them yet. This is deliberately separate from
+  // notifyResponderAssigned(), which fires later once an admin/responder
+  // actually accepts the assignment.
+  let responderNotified = false;
+  const nearestResponder = await responderModel.findNearestAvailable(emergency.latitude, emergency.longitude);
+  if (nearestResponder?.phone) {
+    const responderLog = await smsService.sendSMS({
+      to: nearestResponder.phone, message, emergencyId: emergency.id, contactId: null,
+    });
+    smsLogs.push(responderLog);
+    await notificationModel.create({
+      recipient_id: nearestResponder.user_id,
+      emergency_id: emergency.id,
+      notification_type: 'EMERGENCY_ALERT',
+      message: inAppMessage,
+      status: 'DELIVERED',
+    });
+    responderNotified = true;
+  }
+
+  // Immediately notify every admin account, so the system administrator
+  // never depends on being logged into the dashboard at the right moment.
+  const admins = await userModel.listByRole('ADMIN');
+  let adminsNotified = 0;
+  for (const admin of admins) {
+    if (!admin.phone) continue;
+    const adminLog = await smsService.sendSMS({
+      to: admin.phone, message, emergencyId: emergency.id, contactId: null,
+    });
+    smsLogs.push(adminLog);
+    await notificationModel.create({
+      recipient_id: admin.id,
+      emergency_id: emergency.id,
+      notification_type: 'EMERGENCY_ALERT',
+      message: inAppMessage,
+      status: 'DELIVERED',
+    });
+    adminsNotified += 1;
+  }
+
+  return {
+    inAppMessage, smsLogs, contactsNotified: activeContacts.length,
+    responderNotified, adminsNotified,
+  };
 }
 
 async function notifyStatusChange(emergency, newStatus) {
@@ -64,4 +114,32 @@ async function notifyStatusChange(emergency, newStatus) {
   return message;
 }
 
-module.exports = { notifyNewEmergency, notifyStatusChange, buildSmsMessage };
+/**
+ * Texts the responder directly the moment they're assigned to an
+ * emergency — separate from the emergency-contacts fan-out in
+ * notifyNewEmergency(). Uses the same smsService/provider pipeline, so it
+ * honours SMS_PROVIDER=demo vs twilio exactly like every other SMS.
+ */
+async function notifyResponderAssigned(emergency, responder) {
+  const mapLink = buildMapLink(emergency.latitude, emergency.longitude);
+  const message = [
+    'VOLTA LAKE — YOU HAVE BEEN ASSIGNED',
+    '',
+    `Type: ${emergency.emergency_type.replace(/_/g, ' ')}`,
+    `Priority: ${emergency.priority}`,
+    `Location: ${emergency.latitude.toFixed(4)}, ${emergency.longitude.toFixed(4)}`,
+    '',
+    `Map: ${mapLink}`,
+    '',
+    'Please acknowledge and respond.',
+  ].join('\n');
+
+  return smsService.sendSMS({
+    to: responder.phone,
+    message,
+    emergencyId: emergency.id,
+    contactId: null,
+  });
+}
+
+module.exports = { notifyNewEmergency, notifyStatusChange, notifyResponderAssigned, buildSmsMessage };
