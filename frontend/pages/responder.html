@@ -41,6 +41,10 @@
 
   <div class="grid2">
     <div>
+      <div class="card" style="margin-bottom:16px;">
+        <h3 style="font-size:14px;margin-bottom:12px;">Your status</h3>
+        <div id="myStatusCard"><div class="empty-state">Loading…</div></div>
+      </div>
       <div class="card">
         <h3 style="font-size:14px;margin-bottom:12px;">Emergencies</h3>
         <div id="incidentList"><div class="empty-state">Loading…</div></div>
@@ -65,10 +69,63 @@ const STATUS_FLOW = ['NEW','ACKNOWLEDGED','RESPONDER_ASSIGNED','RESPONSE_IN_PROG
 let incidents = [];
 let selectedId = null;
 let myResponderId = null;
+let myResponder = null;
 
 async function loadMyResponderProfile(){
-  try { const { responder } = await api.myResponderProfile(); myResponderId = responder?.id || null; }
-  catch (e) { /* not fatal */ }
+  try {
+    const { responder } = await api.myResponderProfile();
+    myResponderId = responder?.id || null;
+    myResponder = responder;
+    renderMyStatus();
+  } catch (e) { /* not fatal */ }
+}
+
+function renderMyStatus(){
+  const card = document.getElementById('myStatusCard');
+  if (!myResponder) { card.innerHTML = `<div class="empty-state">No responder profile found on this account.</div>`; return; }
+
+  const hasLocation = myResponder.current_latitude != null && myResponder.current_longitude != null;
+  card.innerHTML = `
+    <div class="drow"><span class="k">Availability</span><span class="v pill ${myResponder.availability_status}">${myResponder.availability_status}</span></div>
+    <div class="drow"><span class="k">Location on file</span><span class="v">${hasLocation ? `${myResponder.current_latitude.toFixed(4)}, ${myResponder.current_longitude.toFixed(4)}` : 'Not set'}</span></div>
+    <p style="color:var(--text-2);font-size:11.5px;margin:10px 0;">
+      Sharing your location marks you AVAILABLE and lets the system pick you as the
+      nearest responder for a new emergency — including the immediate SMS alert sent
+      the moment an emergency is reported.
+    </p>
+    <button class="btn btn-critical" style="width:100%;" onclick="shareMyLocation()">📍 Share my location &amp; go available</button>
+    ${myResponder.availability_status === 'AVAILABLE' ? `<button class="btn btn-ghost" style="width:100%;margin-top:8px;" onclick="setOffline()">Set myself offline</button>` : ''}
+  `;
+}
+
+function shareMyLocation(){
+  if (!myResponderId) return;
+  if (!navigator.geolocation) { toast('Geolocation is not supported by this browser.', 'error'); return; }
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        const { responder } = await api.updateResponder(myResponderId, {
+          availability_status: 'AVAILABLE',
+          current_latitude: pos.coords.latitude,
+          current_longitude: pos.coords.longitude,
+        });
+        myResponder = responder;
+        renderMyStatus();
+        toast('Location shared — you are now available', 'success');
+      } catch (e) { toast(e.message, 'error'); }
+    },
+    (err) => toast(err.message || 'Location permission denied.', 'error'),
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
+async function setOffline(){
+  try {
+    const { responder } = await api.updateResponder(myResponderId, { availability_status: 'OFFLINE' });
+    myResponder = responder;
+    renderMyStatus();
+    toast('You are now offline', 'info');
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function loadIncidents(){
