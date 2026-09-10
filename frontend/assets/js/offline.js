@@ -112,10 +112,8 @@ function sendEmergencyOffline({ emergencyType, reporterName, boatLabel, gps, boa
   const recipients = [
     ...(nearest ? [{ name: nearest.name, phone: nearest.phone }] : []),
     ...cached.admins,
+    ...cached.emergency_contacts,
   ];
-  // Fall back to emergency contacts if we have no cached admins/responders at all
-  // (e.g. this device never got a chance to cache before going offline-first).
-  if (!recipients.length) recipients.push(...cached.emergency_contacts);
 
   queueEmergencyOffline({
     boat_id: boat_id || null,
