@@ -57,6 +57,7 @@ const api = {
   deleteContact: (id) => apiRequest(`/emergency-contacts/${id}`, { method: 'DELETE' }),
 
   listResponders: () => apiRequest('/responders'),
+  myResponderProfile: () => apiRequest('/responders/me'),
   updateResponder: (id, payload) => apiRequest(`/responders/${id}`, { method: 'PATCH', body: payload }),
 
   listSmsLogs: () => apiRequest('/sms-logs'),

@@ -77,7 +77,9 @@ async function loadMyResponderProfile(){
     myResponderId = responder?.id || null;
     myResponder = responder;
     renderMyStatus();
-  } catch (e) { /* not fatal */ }
+  } catch (e) {
+    document.getElementById('myStatusCard').innerHTML = `<div class="error-banner">Could not load your status: ${e.message}</div>`;
+  }
 }
 
 function renderMyStatus(){
